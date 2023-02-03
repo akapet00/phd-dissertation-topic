@@ -3,13 +3,16 @@ import numpy as np
 
 def set_axes_equal(ax):
     """Return 3-D axes with equal scale.
+    
     Note: This function is implemented as in:
     https://stackoverflow.com/a/31364297/15005103 because there is no
     support setting that would enable `ax.axis('equal')` in 3-D.
+    
     Parameters
     ----------
     ax : matplotlib.axes._subplots.Axes3DSubplot
         3-D axes subplot with scale settings set to `auto`.
+
     Returns
     -------
     matplotlib.axes._subplots.Axes3DSubplot
