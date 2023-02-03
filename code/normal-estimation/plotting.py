@@ -1,4 +1,18 @@
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+import contextlib
+
+
+@contextlib.contextmanager
+def set_defense_context():
+    plt.rcParams.update({'text.usetex': True,
+                         'text.latex.preamble': r'\usepackage{amsmath}',
+                         'font.family': 'serif'})
+    sns.set(style='ticks', font='serif', font_scale=1.2)
+    yield
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
 
 def set_axes_equal(ax):
