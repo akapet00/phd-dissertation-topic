@@ -10,7 +10,8 @@ def set_defense_context():
     plt.rcParams.update({'text.usetex': True,
                          'text.latex.preamble': r'\usepackage{amsmath}',
                          'font.family': 'serif'})
-    sns.set(style='ticks', font='serif', font_scale=1.2)
+    sns.set(style='ticks', font='serif', font_scale=1.2,
+            palette=None, color_codes=True)
     yield
     matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
@@ -49,4 +50,30 @@ def set_axes_equal(ax):
     ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
     ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+    return ax
+
+
+def draw_unit_cube(ax):
+    """Return 3-D axes with RGB unit cube.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes._subplots.Axes3DSubplot
+        Empty 3-D axes subplot.
+
+    Returns
+    -------
+    matplotlib.axes._subplots.Axes3DSubplot
+        RGB unit cube.
+    """
+    r = [0, 1]
+    X, Y = np.meshgrid(r, r)
+    ones = np.ones(4).reshape(2, 2)
+    zeros = np.zeros_like(ones)
+    ax.plot_surface(X, Y, zeros, lw=2, color='None', edgecolor='k')
+    ax.plot_surface(X, Y, zeros, lw=2, color='None', edgecolor='k')
+    ax.plot_surface(X, zeros, Y, lw=2, color='None', edgecolor='k')
+    ax.plot_surface(X, ones, Y, lw=2, color='None', edgecolor='k')
+    ax.plot_surface(ones, X, Y, lw=2, color='None', edgecolor='k')
+    ax.plot_surface(zeros, X, Y, lw=2, color='None', edgecolor='k')
     return ax
