@@ -41,7 +41,6 @@ def estimate_normals(xyz, take_every=1, knn=30, fast=True):
         point cloud, and each column corresponds to each component of
         the normal vector.
     """
-    xyz = xyz[::take_every, :]
     try:
         import open3d as o3d
         pcd = o3d.geometry.PointCloud()
