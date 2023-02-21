@@ -115,3 +115,51 @@ def normals_to_rgb(n):  # RGB-cube
                 np.sqrt(np.sum(np.square(n), axis=1)), axis=1), [1, 3]))
     rgb = 127.5 + 127.5 * n
     return rgb / 255.0
+
+
+def cart2sph(x, y, z):
+    """Return spherical given Cartesain coordinates."""
+    r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+    theta = np.arccos(z / r)
+    phi = np.arctan2(y, x)
+    return r, theta, phi
+
+
+def sph2cart(r, theta, phi):
+    """Return Cartesian given Spherical coordinates."""
+    x = r * np.cos(phi) * np.sin(theta)
+    y = r * np.sin(phi) * np.sin(theta)
+    z = r * np.cos(theta)
+    return x, y, z
+
+
+def sph_normals(r, theta, phi):
+    """Return unit vector field components normal to spherical
+    surface."""
+    nx = r ** 2 * np.cos(phi) * np.sin(theta) ** 2 
+    ny = r ** 2 * np.sin(phi) * np.sin(theta) ** 2
+    nz = r ** 2 * np.cos(theta) * np.sin(theta)
+    return nx, ny, nz
+
+
+def cart2cyl(x, y, z):
+    """Return Cylndrical given Cartesain coordinates."""
+    r = np.sqrt(x ** 2 + y ** 2)
+    theta = np.arcsin(y / r)
+    return r, theta, z
+
+
+def cyl2cart(r, theta, z):
+    """Return Cartesian given Cylndrical coordinates."""
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return x, y, z
+
+
+def cyl_normals(r, theta, z):
+    """Return unit vector field components normal to cylindrical
+    surface."""
+    nx = np.cos(theta)
+    ny = np.sin(theta)
+    nz = np.zeros_like(z)
+    return nx, ny, nz
