@@ -1,6 +1,13 @@
 import numpy as np
 
 
+def _pca(X):
+    X = X - X.mean(axis=0)
+    C = X.T @ X
+    U, S, _ = np.linalg.svd(C)
+    return U, S
+
+
 def _estimate_normals_pca(xyz, knn):
     from scipy.spatial import KDTree
     tree = KDTree(xyz)
@@ -8,12 +15,9 @@ def _estimate_normals_pca(xyz, knn):
     for i, query_point in enumerate(xyz):
         nbh_dist, nbh_idx = tree.query([query_point], k=knn)
         query_nbh = xyz[nbh_idx[0]].T 
-        X = query_nbh.T.copy()
-        X = X - X.mean(axis=0)
-        C = X.T @ X
-        U, S, VT = np.linalg.svd(C)
-        n_idx = np.where(S == S.min())[0][0]
-        n[i, :] = U[n_idx]
+        eigenvec, eigenval = _pca(query_nbh.T)
+        n_idx = np.where(eigenval == eigenval.min())[0][0]
+        n[i, :] = eigenvec[n_idx]
     return n
 
 
