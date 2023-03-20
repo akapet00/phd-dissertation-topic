@@ -21,8 +21,9 @@ def _estimate_normals_pca(xyz, knn):
     return n
 
 
-def estimate_normals(xyz, take_every=1, knn=30, fast=True):
+def estimate_normals(xyz, take_every=1, orient=False, knn=30, fast=True):
     """Return estimated normals for a given point cloud.
+    
     Parameters
     ----------
     xyz : numpy.ndarray
@@ -30,6 +31,8 @@ def estimate_normals(xyz, take_every=1, knn=30, fast=True):
     take_every : int, optional
         How many points to skip in the point cloud when estimating
         normal vectors.
+    orient : bool, optional
+        Orient normals consistently (outward direction).
     knn : int, optional
         Number of neighbors for KDTree search.
     fast : bool, optional
@@ -54,12 +57,72 @@ def estimate_normals(xyz, take_every=1, knn=30, fast=True):
             fast_normal_computation=fast
         )
         pcd.normalize_normals()
-        pcd.orient_normals_consistent_tangent_plane(knn)
+        if orient:
+            pcd.orient_normals_consistent_tangent_plane(knn)
         n = np.asarray(pcd.normals)
     except ImportError as e:
         print('Module `open3d` is not found.\n'
               'Proceeding with own normal estimation algorithm.')
         n = _estimate_normals_pca(xyz, knn)
+    return n
+
+
+def _orient_normals(xyz, n):
+    center = np.mean(xyz, axis=0)
+    for i in range(xyz.shape[0]):
+        pi = xyz[i, :] - center
+        ni = n[i]
+        angle = np.arccos(np.clip(np.dot(ni, pi), -1.0, 1.0))
+        if (angle > np.pi/2) or (angle < -np.pi/2):
+            n[i] = -ni
+    return n
+
+
+def estimate_normals_spline(xyz, unit=True, orient=False, knn=30):
+    """Return estimated normals for a given point cloud.
+        
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Point cloud defining a model in 3-D.
+    unit : bool, optional
+        If true, lengths of the normals are 1.
+    orient : bool, optional
+        Orient normals consistently (outward direction).
+    knn : int, optional
+        Number of neighbors for KDTree search.
+
+    Returns
+    -------
+    numpy.ndarray
+        The number of rows correspond to the number of rows of a given
+        point cloud, and each column corresponds to each component of
+        the normal vector.
+    """
+    from scipy import spatial
+    from scipy import interpolate
+    n = np.empty_like(xyz)
+    tree = spatial.KDTree(xyz)
+    for i, query_point in enumerate(xyz):
+        nbh_dist, nbh_idx = tree.query([query_point], k=knn)
+        query_nbh = xyz[nbh_idx.flatten()]
+
+        X = query_nbh.copy()
+        X_norm = X - X.mean(axis=0)
+        U, S, VT = np.linalg.svd(X_norm.T)
+        X_trans = X_norm @ U
+
+        h = interpolate.SmoothBivariateSpline(*X_trans.T)
+
+        ni = np.array([-h(*X_trans[0, :2], dx=1, grid=False).item(),
+                       -h(*X_trans[0, :2], dy=1, grid=False).item(),
+                       1])
+        ni = np.dot(U, ni)
+        if unit:
+            ni = np.divide(ni, np.linalg.norm(ni, 2))
+        n[i, :] = ni
+    if orient:
+        n = _orient_normals(xyz, n)
     return n
 
 
@@ -106,6 +169,7 @@ def normals_to_rgb(n):  # RGB-cube
         The number of rows correspond to the number of rows of a given
         point cloud, each column corresponds to each component of a
         (normalized) normal vector.
+
     Returns
     -------
     numpy.ndarray
@@ -169,8 +233,9 @@ def cyl_normals(r, theta, z):
     return nx, ny, nz
 
 
-def remove_hidden_points(xyz, pov, p=np.pi):
-    """Return RGB color representation of unit vectors.
+def remove_hidden_points(xyz, pov, p=np.pi):  # RHP operator
+    """Remove points of the point cloud that are not directly visible
+    from a preset point of view.
     
     Ref: Katz et al. ACM Transactions on Graphics 26(3), pp: 24-es
          doi: 10.1145/1276377.1276407
@@ -197,3 +262,35 @@ def remove_hidden_points(xyz, pov, p=np.pi):
     xyzf = xyzt + 2 * (R - norm) * (xyzt / norm) # perform spherical flip
     hull = spatial.ConvexHull(np.append(xyzf, [[0,0,0]], axis=0))
     return hull.vertices[:-1]
+
+
+def edblquad(points, values, **kwargs):
+    """Return the approximate value of the integral for sampled 2-D
+    data by using the spline interpolation.
+    
+    Parameters
+    ----------
+    points : numpy.ndarray
+        Data points of shape (N, 2), where N is the number of points.
+    values : numpy.ndarray
+        Sampled integrand function values of shape (N, ).
+    kwargs : dict, optional
+        Additional keyword arguments for
+        `scipy.interpolate.SmoothBivariateSpline`.
+    
+    Returns
+    -------
+    float
+        Approximation of the double integral.
+    """
+    if not isinstance(values, np.ndarray):
+        raise Exception('`values` must be array-like.')
+    try:
+        bbox = [points[:, 0].min(), points[:, 0].max(),
+                points[:, 1].min(), points[:, 1].max()]
+    except TypeError:
+        print('`points` must be a 2-column array.')
+    else:
+        from scipy import interpolate
+        func = interpolate.SmoothBivariateSpline(*points.T, values, **kwargs)
+        return func.integral(*bbox)
