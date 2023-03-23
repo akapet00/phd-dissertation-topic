@@ -67,7 +67,7 @@ def estimate_normals(xyz, take_every=1, orient=False, knn=30, fast=True):
     return n
 
 
-def _orient_normals(xyz, n):
+def _orient_normals_spline(xyz, n):
     center = np.mean(xyz, axis=0)
     for i in range(xyz.shape[0]):
         pi = xyz[i, :] - center
@@ -75,6 +75,15 @@ def _orient_normals(xyz, n):
         angle = np.arccos(np.clip(np.dot(ni, pi), -1.0, 1.0))
         if (angle > np.pi/2) or (angle < -np.pi/2):
             n[i] = -ni
+    return n
+
+
+def _step_normals_spline(X, x, y, kx=4, ky=4, grid=False):
+    from scipy import interpolate
+    h = interpolate.SmoothBivariateSpline(*X.T, kx=kx, ky=ky)
+    n = np.array([-h(x, y, dx=1, grid=grid),
+                  -h(x, y, dy=1, grid=grid),
+                  np.ones_like(x)])
     return n
 
 
@@ -100,7 +109,6 @@ def estimate_normals_spline(xyz, unit=True, orient=False, knn=30):
         the normal vector.
     """
     from scipy import spatial
-    from scipy import interpolate
     n = np.empty_like(xyz)
     tree = spatial.KDTree(xyz)
     for i, query_point in enumerate(xyz):
@@ -109,20 +117,19 @@ def estimate_normals_spline(xyz, unit=True, orient=False, knn=30):
 
         X = query_nbh.copy()
         X_norm = X - X.mean(axis=0)
+        p_norm = query_point - X.mean(axis=0)
         U, S, VT = np.linalg.svd(X_norm.T)
         X_trans = X_norm @ U
-
-        h = interpolate.SmoothBivariateSpline(*X_trans.T)
-
-        ni = np.array([-h(*X_trans[0, :2], dx=1, grid=False).item(),
-                       -h(*X_trans[0, :2], dy=1, grid=False).item(),
-                       1])
+        p_trans = p_norm @ U
+        
+        ni = _step_normals_spline(X_trans, p_trans[0], p_trans[1])
         ni = np.dot(U, ni)
+        
         if unit:
             ni = np.divide(ni, np.linalg.norm(ni, 2))
         n[i, :] = ni
     if orient:
-        n = _orient_normals(xyz, n)
+        n = _orient_normals_spline(xyz, n)
     return n
 
 
@@ -264,7 +271,7 @@ def remove_hidden_points(xyz, pov, p=np.pi):  # RHP operator
     return hull.vertices[:-1]
 
 
-def edblquad(points, values, **kwargs):
+def edblquad(points, values, bbox=None, **kwargs):
     """Return the approximate value of the integral for sampled 2-D
     data by using the spline interpolation.
     
@@ -274,6 +281,8 @@ def edblquad(points, values, **kwargs):
         Data points of shape (N, 2), where N is the number of points.
     values : numpy.ndarray
         Sampled integrand function values of shape (N, ).
+    bbox : list, optional
+        Bounding box that defines integration domain.
     kwargs : dict, optional
         Additional keyword arguments for
         `scipy.interpolate.SmoothBivariateSpline`.
@@ -286,8 +295,9 @@ def edblquad(points, values, **kwargs):
     if not isinstance(values, np.ndarray):
         raise Exception('`values` must be array-like.')
     try:
-        bbox = [points[:, 0].min(), points[:, 0].max(),
-                points[:, 1].min(), points[:, 1].max()]
+        if not bbox:
+            bbox = [points[:, 0].min(), points[:, 0].max(),
+                    points[:, 1].min(), points[:, 1].max()]
     except TypeError:
         print('`points` must be a 2-column array.')
     else:
