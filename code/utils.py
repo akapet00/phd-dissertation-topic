@@ -14,14 +14,24 @@ def _estimate_normals_pca(xyz, knn):
     n = np.empty_like(xyz)
     for i, query_point in enumerate(xyz):
         nbh_dist, nbh_idx = tree.query([query_point], k=knn)
-        query_nbh = xyz[nbh_idx[0]].T 
+        query_nbh = xyz[nbh_idx[0]].T
         eigenvec, eigenval = _pca(query_nbh.T)
         n_idx = np.where(eigenval == eigenval.min())[0][0]
         n[i, :] = eigenvec[n_idx]
     return n
 
+def _orient_normals(xyz, n):
+    center = np.mean(xyz, axis=0)
+    for i in range(xyz.shape[0]):
+        pi = xyz[i, :] - center
+        ni = n[i]
+        angle = np.arccos(np.clip(np.dot(ni, pi), -1.0, 1.0))
+        if (angle > np.pi/2) or (angle < -np.pi/2):
+            n[i] = -ni
+    return n
 
-def estimate_normals(xyz, take_every=1, orient=False, knn=30, fast=True):
+
+def estimate_normals_pca(xyz, take_every=1, orient=False, knn=30, fast=True):
     """Return estimated normals for a given point cloud.
     
     Parameters
@@ -64,17 +74,8 @@ def estimate_normals(xyz, take_every=1, orient=False, knn=30, fast=True):
         print('Module `open3d` is not found.\n'
               'Proceeding with own normal estimation algorithm.')
         n = _estimate_normals_pca(xyz, knn)
-    return n
-
-
-def _orient_normals_spline(xyz, n):
-    center = np.mean(xyz, axis=0)
-    for i in range(xyz.shape[0]):
-        pi = xyz[i, :] - center
-        ni = n[i]
-        angle = np.arccos(np.clip(np.dot(ni, pi), -1.0, 1.0))
-        if (angle > np.pi/2) or (angle < -np.pi/2):
-            n[i] = -ni
+        if orient:
+            n = _orient_normals(xyz, n)
     return n
 
 
@@ -129,7 +130,7 @@ def estimate_normals_spline(xyz, unit=True, orient=False, knn=30):
             ni = np.divide(ni, np.linalg.norm(ni, 2))
         n[i, :] = ni
     if orient:
-        n = _orient_normals_spline(xyz, n)
+        n = _orient_normals(xyz, n)
     return n
 
 
