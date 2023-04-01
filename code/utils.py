@@ -408,7 +408,7 @@ def estimate_curvature(xyz, radius=5):
     Parameters
     ----------
     xyz : numpy.ndarray
-        The point cloud to search for neighbors of.
+        The point cloud of shape (N, 3), N is the number of points.
     radius : numpy.array or float or int, optional
         The radius of points to return.
     
@@ -444,8 +444,7 @@ def remove_hidden_points(xyz, pov, p=np.pi):  # RHP operator
     Parameters
     ----------
     xyz : numpy.ndarray
-        The point cloud of shape (N, 3) where N is the total number of
-        points.
+        The point cloud of shape (N, 3), N is the number of points.
     pov : numpy.ndarray
         Point of view for hidden points removal of shape (1, 3).
     p : float
@@ -466,22 +465,26 @@ def remove_hidden_points(xyz, pov, p=np.pi):  # RHP operator
 
 
 ## quadrature functions
-def estimate_surface_area(points, normals, bbox=None, n=6, **kwargs):
+def estimate_surface_area(xy, n, bbox=None, method=None, p=5, **kwargs):
     """Return the approximate value of the surface area of a non-planar
     surface given tangential points and curvature normals to that
     points.
     
     Parameters
     ----------
-    points : numpy.ndarray
-        Data points of shape (N, 2), where N is the number of points.
-    normals : numpy.ndarray
-        Normals.
-    n : int, optional
-        Non-negative power of 2 to define the number of samples for
-        the Romberg quadrature.
+    xy : numpy.ndarray
+        The point cloud of shape (N, 2), N is the number of points.
+    n : numpy.ndsarray
+        The surface normals of shape (N, 3), they should not be unit.
     bbox : list, optional
         Bounding box that defines integration domain.
+    method : string, optional
+        If None, the integral is computed from spline directly.
+        Alternative method is `romb` which uses Romberg integration by
+        sampling the interpolated function.
+    p : int, optional
+        Non-negative power of 2 to define the number of samples for
+        the Romberg quadrature.
     kwargs : dict, optional
         Additional keyword arguments for
         `scipy.interpolate.SmoothBivariateSpline`.
@@ -491,27 +494,32 @@ def estimate_surface_area(points, normals, bbox=None, n=6, **kwargs):
     float
         Approximation of the surface area.
     """
-    if not isinstance(normals, np.ndarray):
+    if not isinstance(n, np.ndarray):
         raise Exception('`normals` must be array-like.')
     try:
         if not bbox:
-            bbox = [points[:, 0].min(), points[:, 0].max(),
-                    points[:, 1].min(), points[:, 1].max()]
+            bbox = [xy[:, 0].min(), xy[:, 0].max(),
+                    xy[:, 1].min(), xy[:, 1].max()]
     except TypeError:
         print('`points` must be a 2-column array.')
     else:
         from scipy import interpolate
-        from scipy import integrate
-        length = np.linalg.norm(normals, axis=1)
-        f = interpolate.SmoothBivariateSpline(*points.T, length, **kwargs)
-        num = 2 ** n + 1
-        x = np.linspace(bbox[0], bbox[1], num)
-        y = np.linspace(bbox[2], bbox[3], num)
-        dx = (bbox[1] - bbox[0]) / (num - 1)
-        dy = (bbox[3] - bbox[2]) / (num - 1)
-        z = f(x, y)
-        return integrate.romb(
-            integrate.romb(z, dy), dx)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            magnitude = np.linalg.norm(n, axis=1)
+            f = interpolate.SmoothBivariateSpline(*xy.T, magnitude, **kwargs)
+        if method == 'romb':
+            from scipy import integrate
+            num = 2 ** p + 1
+            xi = np.linspace(bbox[0], bbox[1], num)
+            yi = np.linspace(bbox[2], bbox[3], num)
+            dxi = (bbox[1] - bbox[0]) / (num - 1)
+            dyi = (bbox[3] - bbox[2]) / (num - 1)
+            zi = f(xi, yi)
+            return integrate.romb(integrate.romb(zi, dyi), dxi)
+        else:  # default settings
+            return f.integral(*bbox)
 
 
 def edblquad(points, values, bbox=None, **kwargs):
