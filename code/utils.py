@@ -465,7 +465,7 @@ def remove_hidden_points(xyz, pov, p=np.pi):  # RHP operator
 
 
 ## quadrature functions
-def estimate_surface_area(xy, n, bbox=None, method=None, p=5, **kwargs):
+def estimate_surface_area(xy, n, bbox=None, method=None, **kwargs):
     """Return the approximate value of the surface area of a non-planar
     surface given tangential points and curvature normals to that
     points.
@@ -480,11 +480,8 @@ def estimate_surface_area(xy, n, bbox=None, method=None, p=5, **kwargs):
         Bounding box that defines integration domain.
     method : string, optional
         If None, the integral is computed from spline directly.
-        Alternative method is `romb` which uses Romberg integration by
-        sampling the interpolated function.
-    p : int, optional
-        Non-negative power of 2 to define the number of samples for
-        the Romberg quadrature.
+        Alternative method is `gauss` which utilizes adaptive Gauss
+        quadrature.
     kwargs : dict, optional
         Additional keyword arguments for
         `scipy.interpolate.SmoothBivariateSpline`.
@@ -501,7 +498,7 @@ def estimate_surface_area(xy, n, bbox=None, method=None, p=5, **kwargs):
             bbox = [xy[:, 0].min(), xy[:, 0].max(),
                     xy[:, 1].min(), xy[:, 1].max()]
     except TypeError:
-        print('`points` must be a 2-column array.')
+        print('`xy` must be a 2-column array.')
     else:
         from scipy import interpolate
         import warnings
@@ -509,17 +506,15 @@ def estimate_surface_area(xy, n, bbox=None, method=None, p=5, **kwargs):
             warnings.simplefilter('ignore')
             magnitude = np.linalg.norm(n, axis=1)
             f = interpolate.SmoothBivariateSpline(*xy.T, magnitude, **kwargs)
-        if method == 'romb':
-            from scipy import integrate
-            num = 2 ** p + 1
-            xi = np.linspace(bbox[0], bbox[1], num)
-            yi = np.linspace(bbox[2], bbox[3], num)
-            dxi = (bbox[1] - bbox[0]) / (num - 1)
-            dyi = (bbox[3] - bbox[2]) / (num - 1)
-            zi = f(xi, yi)
-            return integrate.romb(integrate.romb(zi, dyi), dxi)
-        else:  # default settings
+        if method is None:  # default settings
             return f.integral(*bbox)
+        if method == 'gauss':
+            from scipy import integrate
+            I, _ = integrate.dblquad(f, *bbox)
+            return I
+        else:  
+            raise ValueError('Given method is not supported')
+        return I
 
 
 def edblquad(points, values, bbox=None, **kwargs):
