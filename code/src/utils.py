@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import interpolate
 from scipy import spatial
 
 
@@ -149,70 +150,22 @@ def polyfit2d(x, y, z, deg=1, rcond=None, full_output=False):
     return coef.reshape(deg+1, deg+1)
 
 
-def estimate_surface_area(xy, n, bbox=None, method=None, **kwargs):
-    """Return the approximate value of the surface area of a non-planar
-    surface given tangential points and curvature normals to that
-    points.
-    
-    Parameters
-    ----------
-    xy : numpy.ndarray
-        The point cloud of shape (N, 2), N is the number of points.
-    n : numpy.ndsarray
-        The surface normals of shape (N, 3), they should not be unit.
-    bbox : list, optional
-        Bounding box that defines integration domain.
-    method : string, optional
-        If None, the integral is computed from spline directly.
-        Alternative method is `gauss` which utilizes adaptive Gauss
-        quadrature.
-    kwargs : dict, optional
-        Additional keyword arguments for
-        `scipy.interpolate.SmoothBivariateSpline`.
-    
-    Returns
-    -------
-    float
-        Approximation of the surface area.
-    """
-    if not isinstance(n, np.ndarray):
-        raise Exception('`normals` must be array-like.')
-    try:
-        if not bbox:
-            bbox = [xy[:, 0].min(), xy[:, 0].max(),
-                    xy[:, 1].min(), xy[:, 1].max()]
-    except TypeError:
-        print('`xy` must be a 2-column array.')
-    else:
-        from scipy import interpolate
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            magnitude = np.linalg.norm(n, axis=1)
-            f = interpolate.SmoothBivariateSpline(*xy.T, magnitude, **kwargs)
-        if method is None:  # default settings
-            return f.integral(*bbox)
-        if method == 'gauss':
-            from scipy import integrate
-            I, _ = integrate.dblquad(f, *bbox)
-            return I
-        else:  
-            raise ValueError('Given method is not supported')
-        return I
-
-
-def edblquad(points, values, bbox=None, **kwargs):
-    """Return the approximate value of the integral for sampled 2-D
-    data by using the spline interpolation.
+def edblquad(points, values, bbox=None, method=None, **kwargs):
+    """Return the approximate solution to the double integral by
+    observing sampled integrand function.
     
     Parameters
     ----------
     points : numpy.ndarray
-        Data points of shape (N, 2), where N is the number of points.
+        The point cloud of shape (N, 2), N is the number of points.
     values : numpy.ndarray
-        Sampled integrand function values of shape (N, ).
+        Sampled integrand of shape (N, 3).
     bbox : list, optional
         Bounding box that defines integration domain.
+    method : string, optional
+        If None, the integral is computed by directly integrating
+        splines. Alternative method is `gauss` which utilizes adaptive
+        Gauss-Kronrad quadrature.
     kwargs : dict, optional
         Additional keyword arguments for
         `scipy.interpolate.SmoothBivariateSpline`.
@@ -220,7 +173,7 @@ def edblquad(points, values, bbox=None, **kwargs):
     Returns
     -------
     float
-        Approximation of the double integral.
+        Approximation of the double integral..
     """
     if not isinstance(values, np.ndarray):
         raise Exception('`values` must be array-like.')
@@ -231,6 +184,20 @@ def edblquad(points, values, bbox=None, **kwargs):
     except TypeError:
         print('`points` must be a 2-column array.')
     else:
-        from scipy import interpolate
-        func = interpolate.SmoothBivariateSpline(*points.T, values, **kwargs)
-        return func.integral(*bbox)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            f = interpolate.SmoothBivariateSpline(*points.T,
+                                                  values,
+                                                  bbox=bbox,
+                                                  **kwargs)
+        if method is None:  # default settings
+            return f.integral(*bbox)
+        if method == 'gauss':
+            from scipy import integrate
+            f_wrap = lambda v, u: f(u, v)
+            I, _ = integrate.dblquad(f, *bbox)
+            return I
+        else:  
+            raise ValueError('Method is not supported')
+        return I
