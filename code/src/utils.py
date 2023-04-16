@@ -173,7 +173,7 @@ def edblquad(points, values, bbox=None, method=None, **kwargs):
     Returns
     -------
     float
-        Approximation of the double integral..
+        Approximation of the double integral.
     """
     if not isinstance(values, np.ndarray):
         raise Exception('`values` must be array-like.')
@@ -201,3 +201,78 @@ def edblquad(points, values, bbox=None, method=None, **kwargs):
         else:  
             raise ValueError('Method is not supported')
         return I
+
+    
+def estimate_surface_area(xyz, n=None, full_output=False):
+    """Return estimated surface area from a smooth representation of a
+    point cloud.
+    
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Point cloud distributed in 3-D space of shape (N, 3) where N is
+        the total number of points.
+    n : numpy.ndarray, optional
+        Oriented normals in 3-D space of shape (N, 3) where N is the
+        number of points in a point cloud. If not provided, normals are
+        automatically inferred from `xyz` which can lead to numerical
+        artifacts depending on the size of the `xyz`.
+    full_output : bool, optional
+        If True, reconstructed mesh is also returned.
+    
+    Returns
+    -------
+    float or tuple
+        Estimated surface area and reconstructed mesh (vertices and
+        triangles) if `full_output` is True.
+    """
+    try:
+        import open3d as o3d
+    except ImportError as e:
+        print('Package open3d is required.')
+    else:
+        N = xyz.shape[0]
+        if N < 10:
+            raise ValueError('Number of points must be > 10.')
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(xyz)
+        if n is not None:
+            pcd.normals = o3d.utility.Vector3dVector(n)
+        else:
+            knn = int(2 * np.log(N))
+            if knn < 5:
+                knn = 5
+            elif knn > 30:
+                knn = 30
+            else:
+                pass  # keep knn as computed
+            pcd.estimate_normals(o3d.geometry.KDTreeSearchParamKNN(knn))
+            pcd.orient_normals_consistent_tangent_plane(knn)
+        # set the magnitude of each normal to 1
+        pcd.normalize_normals()
+        # reconstruct triangular mesh
+        mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+            pcd, depth=6)
+        mesh.remove_duplicated_vertices()
+        # export reconstructed vertices
+        vert = np.asarray(mesh.vertices)
+        # set the point cloud in its orthonormal basis
+        basis = xyz.copy()
+        mu = basis.mean(axis=0)
+        basis = basis - mu
+        cov = basis.T @ basis
+        evec, _, _ = np.linalg.svd(cov)
+        basis = basis @ evec
+        # create the convex hull in 2-D space
+        hull = spatial.Delaunay(basis[:, :2])
+        # remove vertices out of the convex hull
+        vertt = (vert - mu) @ evec
+        vert_mask = hull.find_simplex(vertt[:, :2]) < 0
+        mesh.remove_vertices_by_mask(vert_mask)
+        # compute the surface area
+        area = mesh.get_surface_area()
+        if full_output:
+            vert = np.asarray(mesh.vertices)
+            tri = np.asarray(mesh.triangles)
+            return area, vert, tri
+        return area
