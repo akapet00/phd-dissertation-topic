@@ -1,3 +1,3 @@
 #! /bin/bash
 
-convert -delay 20 -loop 0 *.png -resize 20% -verbose anim.gif
+convert -delay 10 -loop 0 *.png -resize 50% -verbose anim.gif
