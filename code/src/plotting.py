@@ -50,19 +50,15 @@ def set_axes_equal(ax):
     return ax
 
 
-def draw_unit_cube(ax):
+def draw_unit_cube(ax, s=800):
     """Return the RGB unit cube.
 
     Parameters
     ----------
-    elev : float, optional
-        The elevation angle in degrees rotates the camera above the
-        plane of the vertical axis, with a positive angle corresponding
-        to a location above that plane.
-    azim : float, optional
-        The azimuthal angle in degrees rotates the camera about the
-        vertical axis, with a positive angle corresponding to a
-        right-handed rotation.
+    ax : matplotlib.axes._subplots.Axes3DSubplot
+        3-D subplot where the RGB unit cube will be drawn.
+    s : float, optional
+        Size of a marker on a vertex of the cube.
 
     Returns
     -------
@@ -82,5 +78,5 @@ def draw_unit_cube(ax):
     ax.plot_surface(zeros, X, Y, lw=2, color='None', edgecolor='k')
     # add colorized points
     pts = np.array(list(itertools.product([0, 1], repeat=3)))
-    ax.scatter(*pts.T, c=pts, edgecolor='k', depthshade=False, s=450)
+    ax.scatter(*pts.T, c=pts, edgecolor='k', depthshade=False, s=s)
     return ax
