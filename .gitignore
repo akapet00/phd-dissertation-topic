@@ -6,4 +6,4 @@ ipython_config.py
 code/figures/hotspot-detection/animation/*.png
 *.drawio.dtmp
 *.drawio.bkp
-
+*.~lock.*.docx#
